@@ -1,8 +1,21 @@
-import sys  
-
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import os
+
+from PIL import Image
+
+def show(im):
+    imS = cv2.resize(im, (960, 540)) 
+    cv2.imshow('Original image',imS)
+    cv2.waitKey(10000)
+    cv2.destroyAllWindows()
+
+def show_gray(image):
+    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cv2.imshow('Gray image', image_gray)
+    cv2.waitKey(0)
 
 def weights_map(images):
     (w_c, w_s, w_e) = (1, 1, 1)
@@ -49,17 +62,34 @@ def weights_map(images):
 
         weights.append(W)
 
-    nonzero = wsum > 0 #normalizes weigth
+    nonzero = wsum > 0
     for i in range(len(weights)):
-        weights[i][nonzero] = weights[i][nonzero]/sum[nonzero]
-        weights[i] = np.uint8(weights[i]*255)
-
+        weights[i][nonzero] /= wsum[nonzero]
+        # weights[i] = np.uint8(weights[i]*255)
     return weights
        
+def naive_fusion(images, weights):
+    zeros = np.zeros(images[0].shape[:2])
+    pil_image = Image.fromarray(zeros, 'RGB')
+    open_cv_image = np.array(pil_image)
+    naive_image = open_cv_image[:, :, ::-1].copy() 
+    for channel in range(3):
+        for i in range(len(weights)):
+            naive_image[:, :, channel] = naive_image[:, :, channel] + (weights[i] * images[i][:, :, channel])
+    return naive_image
 
 def main(argv):
-    images = cv2.imread('figA.png')
+    path = os.path.dirname(os.path.realpath(__file__)) + "/Images"
+    files = [f for f in os.listdir(path)]
+    images = []
 
+    for file in files:
+        img = cv2.imread(f'Images/{file}')
+        images.append(img)
+
+    W = weights_map(images)
+    res_naive = naive_fusion(images, W)
+    show(res_naive)
 
 if (__name__ == '__main__'):
     main(sys.argv)
