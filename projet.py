@@ -7,15 +7,10 @@ import os
 from PIL import Image
 
 def show(im):
-    imS = cv2.resize(im, (960, 540)) 
-    cv2.imshow('Original image',imS)
+    im = cv2.resize(im, (960, 540)) 
+    cv2.imshow('Image',im)
     cv2.waitKey(10000)
     cv2.destroyAllWindows()
-
-def show_gray(image):
-    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cv2.imshow('Gray image', image_gray)
-    cv2.waitKey(0)
 
 def weights_map(images):
     (w_c, w_s, w_e) = (1, 1, 1)
@@ -62,10 +57,14 @@ def weights_map(images):
 
         weights.append(W)
 
-    nonzero = wsum > 0
     for i in range(len(weights)):
-        weights[i][nonzero] /= wsum[nonzero]
-        # weights[i] = np.uint8(weights[i]*255)
+        weights[i]= weights[i]/wsum
+
+    # weights = np.array(weights)
+    # pil_image = Image.fromarray(weights, 'RGB')
+    # open_cv_image = np.array(pil_image)
+    # show(open_cv_image)
+    # weights = weights.tolist()
     return weights
        
 def naive_fusion(images, weights):
