@@ -59,14 +59,14 @@ def weights_map(images):
         wsum = wsum + W
         
         weights.append(W)
-        show(W*255,titre='Poids')
+        # show(W*255,titre='Poids')
 
     nonzero = wsum > 0
     for i in range(len(weights)):
         weights[i][nonzero]= weights[i][nonzero]/wsum[nonzero]
         
     weights = np.array(weights)
-    show(weights,titre='Poids')
+    # show(weights,titre='Poids')
     weights = weights.tolist()
         
     return weights
@@ -81,9 +81,46 @@ def naive_fusion(images, weights):
             naive_image[:, :, channel] = naive_image[:, :, channel] + (weights[i] * images[i][:, :, channel])
     return naive_image
 
+def reduce(image):
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2) #Gaussian filter coefficients
+    reduced = cv2.filter2D(image, cv2.CV_8UC3, kernel) #Convolution of the image with the kernel
+    reduced = cv2.resize(reduced, None, fx=0.5, fy=0.5)
+    return reduced
+
+def gaussian_pyramid(image, size):
+    G = image.copy()
+    gaussian = [G]
+    for i in range(size):
+        G = reduce(G)
+        gaussian.append(G)
+    return gaussian
+
+def expand(image):
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2)
+    expanded = cv2.resize(image, None, fx=2, fy=2)
+    expanded = cv2.filter2D(expanded, cv2.CV_8UC3, kernel)
+    return expanded
+
+def laplacian_pyramid(image, size):
+    gaussian = gaussian_pyramid(image, size+1)
+    laplacian = [gaussian[size-1]]
+    for i in range(size-1, 0, -1):
+        g = expand(gaussian[i])
+        l = cv2.subtract(gaussian[i-1], g)
+        laplacian = [l] + laplacian
+    return laplacian
+
+def collapse(pyramid):
+    depth = len(pyramid)
+    collapsed = pyramid[depth-1]
+    for i in range(depth-2, -1, -1):
+        collapsed = cv2.add(expand(collapsed), pyramid[i])
+    return collapsed
+
+def fusion()
+
 def main(argv):
     path = os.path.dirname(os.path.realpath(__file__)) + "/Images/"
-    plt.figure()
     files = [f for f in os.listdir(path)]
     images = []
 
@@ -91,9 +128,12 @@ def main(argv):
         img = cv2.imread(f'Images/{file}')
         images.append(img)
 
-    W = weights_map(images)
-    res_naive = naive_fusion(images, W)
-    show(res_naive,titre='naive')
+    W = weights_map(images) #Weigths
+
+    res_naive = naive_fusion(images, W) #Naive Fusion
+    # show(res_naive,titre='naive')
+
+
 
 if (__name__ == '__main__'):
     main(sys.argv)
