@@ -38,14 +38,14 @@ def weights_map(images):
         # well-exposedness
         img = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
         red, green, blue = cv2.split(img)
-        sigma = 0.2
+        sigma = 0.4
         red_exp = np.exp(-(red - 0.5)**2 / (2 * sigma**2))
         green_exp = np.exp(-(green - 0.5)**2 / (2 * sigma**2))
         blue_exp = np.exp(-(blue - 0.5)**2 / (2 * sigma**2))
         exp = red_exp * green_exp * blue_exp
         
         #Weights
-        W = np.ones(image.shape[:2])
+        W = np.ones(image.shape[:2], dtype=np.float32)
 
         W_cont = cont ** w_c
         W = np.multiply(W, W_cont) 
@@ -64,6 +64,7 @@ def weights_map(images):
     nonzero = wsum > 0
     for i in range(len(weights)):
         weights[i][nonzero]= weights[i][nonzero]/wsum[nonzero]
+        weights[i] = np.uint8(weights[i]*255)
         
     weights = np.array(weights)
     # show(weights,titre='Poids')
@@ -82,21 +83,21 @@ def naive_fusion(images, weights):
     return naive_image
 
 def reduce(image):
-    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2) #Gaussian filter coefficients
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4) #Gaussian filter coefficients
     reduced = cv2.filter2D(image, cv2.CV_8UC3, kernel) #Convolution of the image with the kernel
     reduced = cv2.resize(reduced, None, fx=0.5, fy=0.5)
     return reduced
 
 def gaussian_pyramid(image, size):
-    G = image.copy()
-    gaussian = [G]
+    img = image.copy()
+    gaussian = [img]
     for i in range(size):
-        G = reduce(G)
-        gaussian.append(G)
+        img = reduce(img)
+        gaussian.append(img)
     return gaussian
 
 def expand(image):
-    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2)
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4)
     expanded = cv2.resize(image, None, fx=2, fy=2)
     expanded = cv2.filter2D(expanded, cv2.CV_8UC3, kernel)
     return expanded
@@ -111,13 +112,37 @@ def laplacian_pyramid(image, size):
     return laplacian
 
 def collapse(pyramid):
-    depth = len(pyramid)
-    collapsed = pyramid[depth-1]
-    for i in range(depth-2, -1, -1):
+    size = len(pyramid)
+    collapsed = pyramid[size-1]
+    for i in range(size-2, -1, -1):
         collapsed = cv2.add(expand(collapsed), pyramid[i])
     return collapsed
 
-def fusion()
+def fusion(images, weights, size):
+    l = []
+    g = []
+    for (image, weight) in zip(images, weights):
+        gaussian_py = gaussian_pyramid(weight, size)
+        g.append(gaussian_py)
+
+        laplacian_py = laplacian_pyramid(image, size)
+        l.append(laplacian_py)
+        
+    pyramid_weigth = []
+    for i in range(size):
+        ls = np.zeros(l[0][i].shape, dtype=np.uint8)
+        for k in range(len(images)):
+            lp = l[k][i]
+            gps_float = np.float32(g[k][i])/255
+            gp = np.dstack((gps_float, gps_float, gps_float))
+            lp_gp = cv2.multiply(lp, gp, dtype=cv2.CV_8UC3)
+            ls = cv2.add(ls, lp_gp)
+            
+        pyramid_weigth.append(ls)
+
+    fusion = collapse(pyramid_weigth)
+    return fusion
+
 
 def main(argv):
     path = os.path.dirname(os.path.realpath(__file__)) + "/Images/"
@@ -132,7 +157,8 @@ def main(argv):
 
     res_naive = naive_fusion(images, W) #Naive Fusion
     # show(res_naive,titre='naive')
-
+    res = fusion(images, W, 3)
+    show(res)
 
 
 if (__name__ == '__main__'):
