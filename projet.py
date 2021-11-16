@@ -24,15 +24,16 @@ def weights_map(images):
     i = 0
 
     for im in images:
-        image = np.float32(im)/255
+        image = im/255
 
         # contrast
         src_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         laplacian = cv2.Laplacian(src_gray, cv2.CV_32F)
         cont = np.absolute(laplacian)
-        
+                
         # saturation
-        sat =  image.std(axis=2, dtype=np.float32)
+        hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
+        hue,sat,val = cv2.split(hsv)
 
         # well-exposedness
         img = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
@@ -46,18 +47,12 @@ def weights_map(images):
         #Weights
         W = np.ones(image.shape[:2], dtype=np.float32)
 
-        W_cont = cont ** w_c
-        W = np.multiply(W, W_cont)
-
-        W_sat = sat ** w_s
-        W = np.multiply(W, W_sat)
-
-        W_exp = exp ** w_e
-        W = np.multiply(W, W_exp) + 1e-12
-
+        W = (cont ** w_c) * (sat ** w_s) * (exp ** w_e) + 1e-12
+        
         wsum = wsum + W
         
         weights.append(W)
+
         # show(W*255,titre='Poids')
 
     nonzero = wsum > 0
