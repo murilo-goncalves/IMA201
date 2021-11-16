@@ -84,6 +84,7 @@ def naive_fusion(images, weights):
 
 def reduce(image):
     kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4) #Gaussian filter coefficients
+    image = np.asarray(image, dtype=np.uint8)
     reduced = cv2.filter2D(image, cv2.CV_8UC3, kernel) #Convolution of the image with the kernel
     reduced = cv2.resize(reduced, None, fx=0.5, fy=0.5)
     return reduced
@@ -98,6 +99,7 @@ def gaussian_pyramid(image, size):
 
 def expand(image):
     kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4)
+    image = np.asarray(image, dtype=np.uint8)
     expanded = cv2.resize(image, None, fx=2, fy=2)
     expanded = cv2.filter2D(expanded, cv2.CV_8UC3, kernel)
     return expanded
