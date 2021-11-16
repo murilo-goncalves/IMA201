@@ -32,13 +32,12 @@ def weights_map(images):
         cont = np.absolute(laplacian)
         
         # saturation
-        hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
-        hue,sat,val = cv2.split(hsv)
+        sat =  image.std(axis=2, dtype=np.float32)
 
         # well-exposedness
         img = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
         red, green, blue = cv2.split(img)
-        sigma = 0.4
+        sigma = 0.2
         red_exp = np.exp(-(red - 0.5)**2 / (2 * sigma**2))
         green_exp = np.exp(-(green - 0.5)**2 / (2 * sigma**2))
         blue_exp = np.exp(-(blue - 0.5)**2 / (2 * sigma**2))
@@ -48,7 +47,7 @@ def weights_map(images):
         W = np.ones(image.shape[:2], dtype=np.float32)
 
         W_cont = cont ** w_c
-        W = np.multiply(W, W_cont) 
+        W = np.multiply(W, W_cont)
 
         W_sat = sat ** w_s
         W = np.multiply(W, W_sat)
@@ -64,11 +63,11 @@ def weights_map(images):
     nonzero = wsum > 0
     for i in range(len(weights)):
         weights[i][nonzero]= weights[i][nonzero]/wsum[nonzero]
-        weights[i] = np.uint8(weights[i]*255)
+        # weights[i] = weights[i]*255
         
-    weights = np.array(weights)
-    # show(weights,titre='Poids')
-    weights = weights.tolist()
+    # weights = np.array(weights)
+#   show(weights,titre='Poids')
+    # weights = weights.tolist()
         
     return weights
        
@@ -83,9 +82,8 @@ def naive_fusion(images, weights):
     return naive_image
 
 def reduce(image):
-    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4) #Gaussian filter coefficients
-    image = np.asarray(image, dtype=np.uint8)
-    reduced = cv2.filter2D(image, cv2.CV_8UC3, kernel) #Convolution of the image with the kernel
+    kernel = cv2.getGaussianKernel(ksize=4, sigma=0.2) #Gaussian filter coefficients   
+    reduced = cv2.filter2D(image, -1, kernel) #Convolution of the image with the kernel
     reduced = cv2.resize(reduced, None, fx=0.5, fy=0.5)
     return reduced
 
@@ -98,18 +96,18 @@ def gaussian_pyramid(image, size):
     return gaussian
 
 def expand(image):
-    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.4)
-    image = np.asarray(image, dtype=np.uint8)
+    kernel = cv2.getGaussianKernel(ksize=4, sigma=0.2)
     expanded = cv2.resize(image, None, fx=2, fy=2)
-    expanded = cv2.filter2D(expanded, cv2.CV_8UC3, kernel)
+    expanded = cv2.filter2D(expanded, -1, kernel)
+    expanded = np.float32(expanded)
     return expanded
 
 def laplacian_pyramid(image, size):
     gaussian = gaussian_pyramid(image, size+1)
     laplacian = [gaussian[size-1]]
     for i in range(size-1, 0, -1):
-        g = expand(gaussian[i])
-        l = cv2.subtract(gaussian[i-1], g)
+        exp = expand(gaussian[i])
+        l = cv2.subtract(gaussian[i-1], exp)
         laplacian = [l] + laplacian
     return laplacian
 
@@ -124,23 +122,20 @@ def fusion(images, weights, size):
     l = []
     g = []
     for (image, weight) in zip(images, weights):
-        gaussian_py = gaussian_pyramid(weight, size)
-        g.append(gaussian_py)
-
-        laplacian_py = laplacian_pyramid(image, size)
-        l.append(laplacian_py)
+        g.append(gaussian_pyramid(weight, size))
+        l.append(laplacian_pyramid(image, size))
         
     pyramid_weigth = []
     for i in range(size):
-        ls = np.zeros(l[0][i].shape, dtype=np.uint8)
+        pw = np.zeros(l[0][i].shape, dtype=np.float32)
         for k in range(len(images)):
             lp = l[k][i]
-            gps_float = np.float32(g[k][i])/255
-            gp = np.dstack((gps_float, gps_float, gps_float))
-            lp_gp = cv2.multiply(lp, gp, dtype=cv2.CV_8UC3)
-            ls = cv2.add(ls, lp_gp)
+            gps = np.float32(g[k][i])/255
+            gp = np.dstack((gps, gps, gps)) #Stack arrays in sequence depth wise
+            lp_gp = cv2.multiply(lp, gp, dtype=cv2.CV_32F)
+            pw = cv2.add(pw, lp_gp)
             
-        pyramid_weigth.append(ls)
+        pyramid_weigth.append(pw)
 
     fusion = collapse(pyramid_weigth)
     return fusion
@@ -153,7 +148,7 @@ def main(argv):
 
     for file in files:
         img = cv2.imread(f'Images/{file}')
-        images.append(img)
+        images.append(img.astype(np.float32))
 
     W = weights_map(images) #Weigths
 
