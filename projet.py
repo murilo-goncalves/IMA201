@@ -4,16 +4,12 @@ import matplotlib.pyplot as plt
 import cv2
 import os
 
-from PIL import Image
-
-def show(im,titre='none'):
-    if im.shape[0]==3:
-        imnew=im.transpose(1,2,0)
-    else:
-        imnew=im
-
-    cv2.imshow('image', imnew)
-    cv2.waitKey(10000)
+def show(im):
+    plt.figure()
+    plt.imshow(im/im.max(), cmap='gray')
+    
+#    cv2.imshow('image', im)
+#    cv2.waitKey(10000)
 
 def weights_map(images):
     (w_c, w_s, w_e) = (1, 1, 1)
@@ -27,59 +23,56 @@ def weights_map(images):
         image = im/255
 
         # contrast
-        src_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        laplacian = cv2.Laplacian(src_gray, cv2.CV_32F)
-        cont = np.absolute(laplacian)
-                
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        laplacian = cv2.Laplacian(gray, -1)
+        cont = np.abs(laplacian)
+#        print('cont: ', cont.mean(), cont.std(), np.median(cont))
+        
+        
         # saturation
-        hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
-        hue,sat,val = cv2.split(hsv)
-
+        sat = image.std(axis=2, dtype=np.float32)
+#        print('sat: ', sat.mean(), sat.std(), np.median(sat))
+        
+        
         # well-exposedness
-        img = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-        red, green, blue = cv2.split(img)
+        blue, green, red = cv2.split(image)
         sigma = 0.2
-        red_exp = np.exp(-(red - 0.5)**2 / (2 * sigma**2))
-        green_exp = np.exp(-(green - 0.5)**2 / (2 * sigma**2))
-        blue_exp = np.exp(-(blue - 0.5)**2 / (2 * sigma**2))
+        red_exp = np.exp(-(red - 0.5)**2 / (2 * (sigma**2)))
+        green_exp = np.exp(-(green - 0.5)**2 / (2 * (sigma**2)))
+        blue_exp = np.exp(-(blue - 0.5)**2 / (2 * (sigma**2)))
         exp = red_exp * green_exp * blue_exp
+#        print('exp: ', exp.mean(), exp.std(), np.median(exp))
+
         
         #Weights
         W = np.ones(image.shape[:2], dtype=np.float32)
-
+        
         W = (cont ** w_c) * (sat ** w_s) * (exp ** w_e) + 1e-12
+#        print('W: ', W.mean(), W.std(), np.median(W))
         
         wsum = wsum + W
         
         weights.append(W)
 
-        # show(W*255,titre='Poids')
+#        show(W)
 
     nonzero = wsum > 0
     for i in range(len(weights)):
         weights[i][nonzero]= weights[i][nonzero]/wsum[nonzero]
-        # weights[i] = weights[i]*255
-        
-    # weights = np.array(weights)
-#   show(weights,titre='Poids')
-    # weights = weights.tolist()
         
     return weights
        
 def naive_fusion(images, weights):
-    zeros = np.zeros(images[0].shape[:2])
-    pil_image = Image.fromarray(zeros, 'RGB')
-    open_cv_image = np.array(pil_image)
-    naive_image = open_cv_image[:, :, ::-1].copy() 
-    for channel in range(3):
-        for i in range(len(images)):
-            naive_image[:, :, channel] = naive_image[:, :, channel] + (weights[i] * images[i][:, :, channel])
+    naive_image = np.zeros(images[0].shape)
+    for i in range(len(images)):
+        naive_image = naive_image + (np.expand_dims(weights[i],axis=2) * images[i])
     return naive_image
 
 def reduce(image):
-    kernel = cv2.getGaussianKernel(ksize=4, sigma=0.2) #Gaussian filter coefficients   
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2) #Gaussian filter coefficients   
     reduced = cv2.filter2D(image, -1, kernel) #Convolution of the image with the kernel
     reduced = cv2.resize(reduced, None, fx=0.5, fy=0.5)
+    reduced = np.float32(reduced)
     return reduced
 
 def gaussian_pyramid(image, size):
@@ -91,7 +84,7 @@ def gaussian_pyramid(image, size):
     return gaussian
 
 def expand(image):
-    kernel = cv2.getGaussianKernel(ksize=4, sigma=0.2)
+    kernel = cv2.getGaussianKernel(ksize=5, sigma=0.2)
     expanded = cv2.resize(image, None, fx=2, fy=2)
     expanded = cv2.filter2D(expanded, -1, kernel)
     expanded = np.float32(expanded)
@@ -148,7 +141,7 @@ def main(argv):
     W = weights_map(images) #Weigths
 
     res_naive = naive_fusion(images, W) #Naive Fusion
-    # show(res_naive,titre='naive')
+#    show(res_naive)
     res = fusion(images, W, 3)
     show(res)
 
